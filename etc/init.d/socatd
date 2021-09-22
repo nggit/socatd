@@ -1,0 +1,85 @@
+#!/usr/bin/env sh
+# SPDX-License-Identifier: GPL-2.0-or-later
+# socatd - A simple socat daemon script for both sysvinit and systemd.
+# https://github.com/nggit/socatd
+# Copyright (c) 2021 nggit.
+
+### BEGIN INIT INFO
+# Provides:          socatd
+# Required-Start:    $local_fs $network
+# Required-Stop:     $local_fs $network
+# Default-Start:     2 3 4 5
+# Default-Stop:      0 1 6
+# Short-Description: Socat Daemon
+### END INIT INFO
+
+NAME=socatd
+PROG=/usr/bin/socat
+CONF=/etc/$NAME.conf
+PIDFILE=/var/run/$NAME.pid
+LOGFILE=/var/log/$NAME.log
+LOGSIZE=4096
+
+socat() {
+    args=$*
+    pid=${args% *}; pid=${pid##* }
+    pidfile=$PIDFILE.$( printf "%s" "$pid" | tr / _ )
+
+    if [ -f "$pidfile" ] && printf " %s " "$( pidof socat )" | grep " $( cat "$pidfile" ) " > /dev/null 2>&1; then
+        printf "socat (pid: %d) already running\n" "$( cat "$pidfile" )"
+    else
+        # shellcheck disable=SC2086
+        $PROG $args >> $LOGFILE 2>&1 &
+        echo $! > "$pidfile"
+    fi
+}
+
+start() {
+    pidfile=$PIDFILE.main
+
+    if [ -f "$pidfile" ] && printf " %s " "$( pidof sh )" | grep " $( cat "$pidfile" ) " > /dev/null 2>&1; then
+        printf "sh (pid: %d) already running\n" "$( cat "$pidfile" )"
+    else
+        while :; do
+
+            # shellcheck disable=SC1090
+            test -f $CONF && . $CONF
+
+            sleep 60
+            if [ -f $LOGFILE ]; then
+                test "$( wc -c < $LOGFILE )" -gt $LOGSIZE && : > $LOGFILE
+            else
+                break
+            fi
+        done &
+        echo $! > "$pidfile"
+    fi
+}
+
+stop() {
+    for pidfile in "$PIDFILE".*; do
+        test -f "$pidfile" && kill -9 "$( cat "$pidfile" )"
+    done
+
+    rm -rf $PIDFILE.*
+    rm -rf $LOGFILE
+}
+
+case "${1-}" in
+    start)
+        start
+        ;;
+    stop)
+        stop
+        ;;
+    restart)
+        stop
+        start
+        ;;
+    *)
+        printf "Usage: %s {start|stop|restart}\n" "$0" 1>&2
+        exit 1
+        ;;
+esac
+
+exit 0

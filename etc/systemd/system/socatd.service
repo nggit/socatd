@@ -1,0 +1,17 @@
+# /etc/systemd/system/socatd.service
+
+[Unit]
+Description=Socatd Service
+Requires=network-online.target
+After=network-online.target
+
+[Service]
+Type=forking
+PIDFile=/var/run/socatd.pid.main
+ExecStart=/etc/init.d/socatd start
+ExecStop=/etc/init.d/socatd stop
+Restart=always
+StandardOutput=null
+
+[Install]
+WantedBy=multi-user.target
